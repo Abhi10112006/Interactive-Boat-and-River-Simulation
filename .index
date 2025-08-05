@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Boat in River Simulation</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        canvas {
+            background: linear-gradient(to bottom, #87CEEB, #a1d8f0);
+            touch-action: none;
+        }
+        .river-bank {
+            background-color: #8B5A2B; /* Brown color for banks */
+            background-image: linear-gradient(45deg, #7a4d23 25%, transparent 25%), 
+                              linear-gradient(-45deg, #7a4d23 25%, transparent 25%), 
+                              linear-gradient(45deg, transparent 75%, #7a4d23 75%), 
+                              linear-gradient(-45deg, transparent 75%, #7a4d23 75%);
+            background-size: 20px 20px;
+        }
+        .slider-thumb::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            background: #3b82f6;
+            cursor: pointer;
+            border-radius: 50%;
+            border: 2px solid white;
+            box-shadow: 0 0 5px rgba(0,0,0,0.2);
+        }
+        .slider-thumb::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            background: #3b82f6;
+            cursor: pointer;
+            border-radius: 50%;
+            border: 2px solid white;
+            box-shadow: 0 0 5px rgba(0,0,0,0.2);
+        }
+        .history-item {
+            transition: background-color 0.3s;
+        }
+        .history-item:hover {
+            background-color: #f0f9ff; /* light-blue-50 */
+        }
+    </style>
+</head>
+<body class="bg-gray-100 flex items-center justify-center min-h-screen p-4">
+
+    <div class="w-full max-w-5xl mx-auto bg-white rounded-xl shadow-lg p-4 sm:p-6">
+        <h1 class="text-xl sm:text-2xl font-bold text-center text-gray-800 mb-2">Boat in a River: Minimum Drift</h1>
+        <p class="text-center text-gray-600 mb-4 text-sm sm:text-base">Adjust the speeds and angle to see how they affect the boat's path and drift.</p>
+
+        <div class="relative w-full aspect-[2/1] rounded-lg overflow-hidden border-2 border-gray-300">
+            <div class="absolute top-0 left-0 w-full h-12 river-bank z-10"></div>
+            <canvas id="simulationCanvas"></canvas>
+            <div class="absolute bottom-0 left-0 w-full h-12 river-bank z-10"></div>
+        </div>
+
+        <!-- Controls -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-4">
+            <div class="bg-gray-50 p-3 rounded-lg">
+                <label for="boatSpeedSlider" class="block text-sm font-medium text-gray-700">Boat Speed (v)</label>
+                <div class="flex items-center space-x-2 mt-2">
+                    <input id="boatSpeedSlider" type="range" min="10" max="200" value="50" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer slider-thumb">
+                    <span id="boatSpeedValue" class="font-semibold text-blue-600 text-md w-14 text-center">50</span>
+                </div>
+            </div>
+            <div class="bg-gray-50 p-3 rounded-lg">
+                <label for="riverSpeedSlider" class="block text-sm font-medium text-gray-700">River Speed</label>
+                <div class="flex items-center space-x-2 mt-2">
+                    <input id="riverSpeedSlider" type="range" min="10" max="200" value="100" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer slider-thumb">
+                    <span id="riverSpeedValue" class="font-semibold text-green-600 text-md w-14 text-center">100</span>
+                </div>
+            </div>
+            <div class="bg-gray-50 p-3 rounded-lg">
+                <label for="angleSlider" class="block text-sm font-medium text-gray-700">Boat Angle</label>
+                <div class="flex items-center space-x-2 mt-2">
+                    <input id="angleSlider" type="range" min="90" max="180" value="120" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer slider-thumb">
+                    <span id="angleValue" class="font-semibold text-purple-600 text-md w-14 text-center">120°</span>
+                </div>
+            </div>
+            <div class="bg-gray-50 p-3 rounded-lg flex flex-col justify-between">
+                 <div class="flex items-center justify-center gap-2">
+                     <button id="startButton" class="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg transition-colors shadow-md">Start</button>
+                     <button id="optimalButton" class="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg transition-colors shadow-md">Set Optimal</button>
+                 </div>
+                 <p class="text-center text-lg font-bold text-gray-800 mt-2" id="driftValue">Drift: ---</p>
+            </div>
+        </div>
+        <div id="infoBox" class="text-center text-sm text-gray-600 mt-2 p-2 bg-gray-100 rounded-md h-8"></div>
+        
+        <!-- NEW FEATURE: History Log -->
+        <div class="mt-6">
+            <div class="flex justify-between items-center mb-2">
+                <h3 class="text-lg font-semibold text-gray-700">Simulation History</h3>
+                <button id="clearHistoryButton" class="text-sm bg-red-500 hover:bg-red-600 text-white font-semibold py-1 px-3 rounded-lg transition-colors">Clear History</button>
+            </div>
+            <div class="bg-gray-50 rounded-lg p-3 max-h-48 overflow-y-auto border">
+                <ul id="historyList" class="space-y-2">
+                    <li class="text-gray-500 text-center italic">Run a simulation to see results here.</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Updated credit line -->
+        <p class="text-center text-sm font-semibold text-gray-500 mt-6">Created by Abhinav Yaduvanshi</p>
+    </div>
+
+    <script>
+        // Canvas and context
+        const canvas = document.getElementById('simulationCanvas');
+        const ctx = canvas.getContext('2d');
+        const parentDiv = canvas.parentElement;
+
+        // UI Elements
+        const boatSpeedSlider = document.getElementById('boatSpeedSlider');
+        const boatSpeedValue = document.getElementById('boatSpeedValue');
+        const riverSpeedSlider = document.getElementById('riverSpeedSlider');
+        const riverSpeedValue = document.getElementById('riverSpeedValue');
+        const angleSlider = document.getElementById('angleSlider');
+        const angleValue = document.getElementById('angleValue');
+        const startButton = document.getElementById('startButton');
+        const optimalButton = document.getElementById('optimalButton');
+        const driftValue = document.getElementById('driftValue');
+        const infoBox = document.getElementById('infoBox');
+        const historyList = document.getElementById('historyList');
+        const clearHistoryButton = document.getElementById('clearHistoryButton');
+
+        // Simulation parameters
+        let boatSpeed = 50;
+        let riverSpeed = 100;
+        const BANK_HEIGHT = 48;
+        let riverWidth;
+        
+        let boat = { x: 0, y: 0, angle: 0 };
+        let path = [];
+        let animationFrameId;
+        let lastTime = 0;
+        let isAnimating = false;
+        let simulationHistory = [];
+
+        // --- Setup and Update ---
+        function updateParameters() {
+            boatSpeed = parseInt(boatSpeedSlider.value);
+            boatSpeedValue.textContent = boatSpeed;
+            riverSpeed = parseInt(riverSpeedSlider.value);
+            riverSpeedValue.textContent = riverSpeed;
+            angleValue.textContent = `${angleSlider.value}°`;
+            infoBox.textContent = '';
+            resetSimulation();
+        }
+
+        function resizeCanvas() {
+            canvas.width = parentDiv.clientWidth;
+            canvas.height = parentDiv.clientHeight;
+            riverWidth = canvas.height - (2 * BANK_HEIGHT);
+            resetSimulation();
+        }
+
+        // --- Simulation Logic ---
+        function resetSimulation() {
+            if (animationFrameId) {
+                cancelAnimationFrame(animationFrameId);
+                animationFrameId = null;
+            }
+            isAnimating = false;
+            boat.x = canvas.width / 2;
+            boat.y = canvas.height - BANK_HEIGHT;
+            boat.angle = parseInt(angleSlider.value) * (Math.PI / 180);
+            path = [{x: boat.x, y: boat.y}];
+            lastTime = 0;
+            driftValue.textContent = "Drift: ---";
+            draw();
+        }
+
+        function animate(timestamp) {
+            if (!isAnimating) return;
+            if (lastTime === 0) lastTime = timestamp;
+            const deltaTime = (timestamp - lastTime) / 1000;
+
+            const boatVx_rel_water = boatSpeed * Math.cos(boat.angle);
+            const boatVy_rel_water = -boatSpeed * Math.sin(boat.angle);
+            const resultantVx = boatVx_rel_water + riverSpeed;
+            const resultantVy = boatVy_rel_water;
+
+            boat.x += resultantVx * deltaTime;
+            boat.y += resultantVy * deltaTime;
+            path.push({x: boat.x, y: boat.y});
+            draw();
+
+            if (boat.y > BANK_HEIGHT) {
+                animationFrameId = requestAnimationFrame(animate);
+            } else {
+                isAnimating = false;
+                const finalDrift = boat.x - (canvas.width / 2);
+                const driftColor = Math.abs(finalDrift) < 1 ? 'text-green-500' : 'text-red-500';
+                driftValue.innerHTML = `Drift: <span class="${driftColor}">${finalDrift.toFixed(1)} px</span>`;
+                logHistory(finalDrift);
+            }
+        }
+        
+        function calculateAndSetOptimalAngle() {
+            let optimalAngleRad;
+            let infoText = '';
+            if (boatSpeed > riverSpeed) {
+                optimalAngleRad = Math.acos(-riverSpeed / boatSpeed);
+                infoText = `Optimal for ZERO drift: ${(optimalAngleRad * 180 / Math.PI).toFixed(1)}°`;
+            } else {
+                optimalAngleRad = Math.acos(-boatSpeed / riverSpeed);
+                infoText = `Optimal for MINIMUM drift: ${(optimalAngleRad * 180 / Math.PI).toFixed(1)}°`;
+            }
+            angleSlider.value = optimalAngleRad * 180 / Math.PI;
+            angleValue.textContent = `${Math.round(angleSlider.value)}°`;
+            infoBox.textContent = infoText;
+            resetSimulation();
+        }
+
+        // --- History Logic ---
+        function logHistory(drift) {
+            const result = {
+                boatSpeed: boatSpeed,
+                riverSpeed: riverSpeed,
+                angle: Math.round(angleSlider.value),
+                drift: drift.toFixed(1)
+            };
+            simulationHistory.unshift(result); // Add to the beginning
+            if (simulationHistory.length > 10) { // Keep last 10 results
+                simulationHistory.pop();
+            }
+            updateHistoryDisplay();
+        }
+
+        function updateHistoryDisplay() {
+            historyList.innerHTML = '';
+            if (simulationHistory.length === 0) {
+                historyList.innerHTML = '<li class="text-gray-500 text-center italic">Run a simulation to see results here.</li>';
+                return;
+            }
+            simulationHistory.forEach(result => {
+                const li = document.createElement('li');
+                li.className = 'history-item p-2 rounded-md grid grid-cols-4 gap-2 text-xs sm:text-sm text-gray-700 border-b';
+                
+                const driftColor = Math.abs(result.drift) < 1 ? 'text-green-600' : 'text-red-600';
+
+                li.innerHTML = `
+                    <span>Boat: <b class="text-blue-600">${result.boatSpeed}</b></span>
+                    <span>River: <b class="text-green-600">${result.riverSpeed}</b></span>
+                    <span>Angle: <b class="text-purple-600">${result.angle}°</b></span>
+                    <span>Drift: <b class="${driftColor} font-bold">${result.drift}</b></span>
+                `;
+                historyList.appendChild(li);
+            });
+        }
+
+        // --- Drawing Functions ---
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drawWater();
+            drawPath();
+            drawBoat();
+            if (!isAnimating) {
+                drawVectors();
+            }
+        }
+        
+        function drawWater() {
+            const waterAnimationOffset = (performance.now() / 20) % 40;
+            ctx.fillStyle = '#a1d8f0';
+            ctx.fillRect(0, BANK_HEIGHT, canvas.width, riverWidth);
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+            ctx.lineWidth = 1;
+            for(let i = 0; i < 15; i++) {
+                const y = BANK_HEIGHT + (i / 15) * riverWidth;
+                ctx.beginPath();
+                ctx.moveTo(-40 + waterAnimationOffset, y);
+                for(let j = 0; j < canvas.width / 40 + 2; j++){
+                    ctx.lineTo(j*40 - 40 + waterAnimationOffset, y + Math.sin(j + performance.now()/500)*2);
+                }
+                ctx.stroke();
+            }
+        }
+
+        function drawPath() {
+            if(path.length < 2) return;
+            ctx.beginPath();
+            ctx.moveTo(path[0].x, path[0].y);
+            for (let i = 1; i < path.length; i++) {
+                ctx.lineTo(path[i].x, path[i].y);
+            }
+            ctx.strokeStyle = 'rgba(220, 38, 38, 0.8)';
+            ctx.lineWidth = 3;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            ctx.stroke();
+        }
+
+        function drawBoat() {
+            const boatLength = 20;
+            const boatWidth = 10;
+            ctx.save();
+            ctx.translate(boat.x, boat.y);
+            
+            const boatVy_rel_water = -boatSpeed * Math.sin(boat.angle);
+            const resultantVx = boatSpeed * Math.cos(boat.angle) + riverSpeed;
+            const resultantAngle = Math.atan2(boatVy_rel_water, resultantVx);
+
+            ctx.rotate(resultantAngle);
+            
+            ctx.fillStyle = '#8B4513';
+            ctx.beginPath();
+            ctx.moveTo(-boatLength / 2, 0);
+            ctx.lineTo(boatLength / 4, -boatWidth / 2);
+            ctx.lineTo(boatLength / 2, 0);
+            ctx.lineTo(boatLength / 4, boatWidth / 2);
+            ctx.closePath();
+            ctx.fill();
+            ctx.strokeStyle = '#5C2F0E';
+            ctx.stroke();
+
+            ctx.fillStyle = '#D2B48C';
+            ctx.fillRect(-boatLength / 4, -boatWidth / 4, boatLength / 4, boatWidth / 2);
+            ctx.strokeRect(-boatLength / 4, -boatWidth / 4, boatLength / 4, boatWidth / 2);
+            ctx.restore();
+        }
+
+        function drawVectors() {
+            const origin = { x: boat.x, y: boat.y };
+            const scale = 0.3;
+            drawVector(origin, boat.angle, boatSpeed * scale, '#60a5fa', 'v_boat');
+            drawVector(origin, 0, riverSpeed * scale, '#34d399', 'v_river');
+            const boatVx_rel_water = boatSpeed * Math.cos(boat.angle);
+            const boatVy_rel_water = -boatSpeed * Math.sin(boat.angle);
+            const resultantVx = boatVx_rel_water + riverSpeed;
+            const resultantVy = boatVy_rel_water;
+            const resultantMagnitude = Math.sqrt(resultantVx**2 + resultantVy**2);
+            const resultantAngle = Math.atan2(resultantVy, resultantVx);
+            drawVector(origin, resultantAngle, resultantMagnitude * scale, '#f87171', 'v_resultant');
+        }
+
+        function drawVector(start, angle, magnitude, color, label) {
+            const endX = start.x + magnitude * Math.cos(angle);
+            const endY = start.y + magnitude * Math.sin(angle);
+            ctx.beginPath();
+            ctx.moveTo(start.x, start.y);
+            ctx.lineTo(endX, endY);
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 3;
+            ctx.stroke();
+            ctx.save();
+            ctx.translate(endX, endY);
+            ctx.rotate(angle);
+            ctx.beginPath();
+            ctx.moveTo(0, 0);
+            ctx.lineTo(-10, -5);
+            ctx.lineTo(-10, 5);
+            ctx.closePath();
+            ctx.fillStyle = color;
+            ctx.fill();
+            ctx.restore();
+            ctx.fillStyle = color;
+            ctx.font = 'bold 14px Inter';
+            ctx.fillText(label, endX + 10, endY);
+        }
+
+        // --- Event Listeners ---
+        [boatSpeedSlider, riverSpeedSlider, angleSlider].forEach(slider => {
+            slider.addEventListener('input', updateParameters);
+        });
+        startButton.addEventListener('click', () => {
+            if (!isAnimating) {
+                resetSimulation();
+                isAnimating = true;
+                lastTime = 0;
+                animationFrameId = requestAnimationFrame(animate);
+            }
+        });
+        optimalButton.addEventListener('click', calculateAndSetOptimalAngle);
+        clearHistoryButton.addEventListener('click', () => {
+            simulationHistory = [];
+            updateHistoryDisplay();
+        });
+        window.addEventListener('resize', resizeCanvas);
+
+        // Initial setup
+        resizeCanvas();
+        updateParameters();
+    </script>
+</body>
+</html>
+
+
