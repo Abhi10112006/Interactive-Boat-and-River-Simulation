@@ -1,397 +1,531 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Boat in River Simulation</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <style>
-        body {
-            font-family: 'Inter', sans-serif;
-        }
-        canvas {
-            background: linear-gradient(to bottom, #87CEEB, #a1d8f0);
-            touch-action: none;
-        }
-        .river-bank {
-            background-color: #8B5A2B; /* Brown color for banks */
-            background-image: linear-gradient(45deg, #7a4d23 25%, transparent 25%), 
-                              linear-gradient(-45deg, #7a4d23 25%, transparent 25%), 
-                              linear-gradient(45deg, transparent 75%, #7a4d23 75%), 
-                              linear-gradient(-45deg, transparent 75%, #7a4d23 75%);
-            background-size: 20px 20px;
-        }
-        .slider-thumb::-webkit-slider-thumb {
-            -webkit-appearance: none;
-            appearance: none;
-            width: 20px;
-            height: 20px;
-            background: #3b82f6;
-            cursor: pointer;
-            border-radius: 50%;
-            border: 2px solid white;
-            box-shadow: 0 0 5px rgba(0,0,0,0.2);
-        }
-        .slider-thumb::-moz-range-thumb {
-            width: 20px;
-            height: 20px;
-            background: #3b82f6;
-            cursor: pointer;
-            border-radius: 50%;
-            border: 2px solid white;
-            box-shadow: 0 0 5px rgba(0,0,0,0.2);
-        }
-        .history-item {
-            transition: background-color 0.3s;
-        }
-        .history-item:hover {
-            background-color: #f0f9ff; /* light-blue-50 */
-        }
-    </style>
+   <meta charset="UTF-8">
+   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+   <title>Cat Runner</title>
+   <style>
+       @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+       
+       :root {
+           --bg-color: #e0f7fa;
+           --main-color: #263238;
+           --accent-color: #ff9800;
+       }
+
+       body {
+           font-family: 'Press Start 2P', cursive;
+           background-color: var(--bg-color);
+           color: var(--main-color);
+           display: flex;
+           justify-content: center;
+           align-items: center;
+           height: 100vh;
+           margin: 0;
+           overflow: hidden;
+           flex-direction: column;
+       }
+
+       #game-container {
+           position: relative;
+           border: 5px solid var(--main-color);
+           box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+           border-radius: 15px;
+           overflow: hidden;
+           background: linear-gradient(to bottom, #87ceeb, #e0f7fa);
+           width: 90vw;
+           height: 50vw;
+           max-width: 900px;
+           max-height: 500px;
+       }
+
+       canvas {
+           display: block;
+           width: 100%;
+           height: 100%;
+       }
+
+       #ui-overlay {
+           position: absolute;
+           top: 0;
+           left: 0;
+           width: 100%;
+           height: 100%;
+           display: flex;
+           flex-direction: column;
+           justify-content: space-between;
+           align-items: center;
+           padding: 1rem;
+           box-sizing: border-box;
+           pointer-events: none; /* Allows clicks to pass through to the canvas */
+       }
+
+       .score-display {
+           display: flex;
+           width: 100%;
+           justify-content: flex-end;
+           gap: 2rem;
+       }
+
+       .score-item {
+           font-size: 1.5rem;
+           text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
+       }
+
+       #game-over-screen {
+           position: absolute;
+           top: 0;
+           left: 0;
+           width: 100%;
+           height: 100%;
+           background-color: rgba(255, 255, 255, 0.9);
+           display: none;
+           flex-direction: column;
+           justify-content: center;
+           align-items: center;
+           text-align: center;
+           border-radius: 15px;
+           pointer-events: all;
+       }
+
+       #game-over-screen h2 {
+           font-size: 2.5rem;
+           margin-bottom: 1rem;
+           color: var(--accent-color);
+       }
+
+       #game-over-screen p {
+           font-size: 1.2rem;
+           margin-bottom: 2rem;
+       }
+
+       #restart-btn {
+           background-color: var(--main-color);
+           color: #fff;
+           padding: 1rem 2rem;
+           border-radius: 50px;
+           font-family: 'Press Start 2P', cursive;
+           font-size: 1rem;
+           border: none;
+           cursor: pointer;
+           transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+           box-shadow: 0 5px 10px rgba(0,0,0,0.2);
+       }
+
+       #restart-btn:hover {
+           transform: translateY(-3px);
+           box-shadow: 0 8px 15px rgba(0,0,0,0.3);
+       }
+
+       #cat-sprite-container {
+           position: absolute;
+           bottom: 0;
+           left: 10%;
+           width: 80px;
+           height: 80px;
+           transform-origin: bottom;
+       }
+       
+       .hidden {
+           display: none;
+       }
+
+       .jump-animation {
+           animation: jump-arc 0.5s ease-out;
+       }
+
+       @keyframes jump-arc {
+           0% { transform: translateY(0); }
+           50% { transform: translateY(-100px); }
+           100% { transform: translateY(0); }
+       }
+   </style>
 </head>
-<body class="bg-gray-100 flex items-center justify-center min-h-screen p-4">
+<body>
+   <div id="game-container">
+       <canvas id="game-canvas"></canvas>
+       <div id="ui-overlay">
+           <div class="score-display">
+               <div class="score-item">HI <span id="high-score">0</span></div>
+               <div class="score-item">SCORE <span id="current-score">0</span></div>
+           </div>
+           <div id="game-over-screen">
+               <h2>GAME OVER</h2>
+               <p>Score: <span id="final-score">0</span></p>
+               <button id="restart-btn">RESTART</button>
+           </div>
+       </div>
+   </div>
 
-    <div class="w-full max-w-5xl mx-auto bg-white rounded-xl shadow-lg p-4 sm:p-6">
-        <h1 class="text-xl sm:text-2xl font-bold text-center text-gray-800 mb-2">Boat in a River: Minimum Drift</h1>
-        <p class="text-center text-gray-600 mb-4 text-sm sm:text-base">Adjust the speeds and angle to see how they affect the boat's path and drift.</p>
+   <!-- External Libraries -->
+   <script src="https://cdn.jsdelivr.net/npm/matter-js@0.19.0/build/matter.min.js"></script>
+   <script src="https://cdn.jsdelivr.net/npm/tone@14.7.58/build/Tone.min.js"></script>
 
-        <div class="relative w-full aspect-[2/1] rounded-lg overflow-hidden border-2 border-gray-300">
-            <div class="absolute top-0 left-0 w-full h-12 river-bank z-10"></div>
-            <canvas id="simulationCanvas"></canvas>
-            <div class="absolute bottom-0 left-0 w-full h-12 river-bank z-10"></div>
-        </div>
+   <script>
+       // --- Core Game Setup ---
+       const gameContainer = document.getElementById('game-container');
+       const canvas = document.getElementById('game-canvas');
+       const context = canvas.getContext('2d');
+       const gameOverScreen = document.getElementById('game-over-screen');
+       const restartBtn = document.getElementById('restart-btn');
+       const scoreSpan = document.getElementById('current-score');
+       const highScoreSpan = document.getElementById('high-score');
+       const finalScoreSpan = document.getElementById('final-score');
 
-        <!-- Controls -->
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-4">
-            <div class="bg-gray-50 p-3 rounded-lg">
-                <label for="boatSpeedSlider" class="block text-sm font-medium text-gray-700">Boat Speed (v)</label>
-                <div class="flex items-center space-x-2 mt-2">
-                    <input id="boatSpeedSlider" type="range" min="10" max="200" value="50" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer slider-thumb">
-                    <span id="boatSpeedValue" class="font-semibold text-blue-600 text-md w-14 text-center">50</span>
-                </div>
-            </div>
-            <div class="bg-gray-50 p-3 rounded-lg">
-                <label for="riverSpeedSlider" class="block text-sm font-medium text-gray-700">River Speed</label>
-                <div class="flex items-center space-x-2 mt-2">
-                    <input id="riverSpeedSlider" type="range" min="10" max="200" value="100" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer slider-thumb">
-                    <span id="riverSpeedValue" class="font-semibold text-green-600 text-md w-14 text-center">100</span>
-                </div>
-            </div>
-            <div class="bg-gray-50 p-3 rounded-lg">
-                <label for="angleSlider" class="block text-sm font-medium text-gray-700">Boat Angle</label>
-                <div class="flex items-center space-x-2 mt-2">
-                    <input id="angleSlider" type="range" min="90" max="180" value="120" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer slider-thumb">
-                    <span id="angleValue" class="font-semibold text-purple-600 text-md w-14 text-center">120°</span>
-                </div>
-            </div>
-            <div class="bg-gray-50 p-3 rounded-lg flex flex-col justify-between">
-                 <div class="flex items-center justify-center gap-2">
-                     <button id="startButton" class="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg transition-colors shadow-md">Start</button>
-                     <button id="optimalButton" class="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg transition-colors shadow-md">Set Optimal</button>
-                 </div>
-                 <p class="text-center text-lg font-bold text-gray-800 mt-2" id="driftValue">Drift: ---</p>
-            </div>
-        </div>
-        <div id="infoBox" class="text-center text-sm text-gray-600 mt-2 p-2 bg-gray-100 rounded-md h-8"></div>
-        
-        <!-- NEW FEATURE: History Log -->
-        <div class="mt-6">
-            <div class="flex justify-between items-center mb-2">
-                <h3 class="text-lg font-semibold text-gray-700">Simulation History</h3>
-                <button id="clearHistoryButton" class="text-sm bg-red-500 hover:bg-red-600 text-white font-semibold py-1 px-3 rounded-lg transition-colors">Clear History</button>
-            </div>
-            <div class="bg-gray-50 rounded-lg p-3 max-h-48 overflow-y-auto border">
-                <ul id="historyList" class="space-y-2">
-                    <li class="text-gray-500 text-center italic">Run a simulation to see results here.</li>
-                </ul>
-            </div>
-        </div>
+       // --- Physics Engine Initialization ---
+       const { Engine, Render, World, Bodies, Events, Runner, Body } = Matter;
+       let engine;
+       let render;
+       let runner;
+       let cat;
+       let ground;
+       let obstacles = [];
+       let gameSpeed = 1;
+       let score = 0;
+       let isRunning = false;
+       let isJumping = false;
+       let isDucking = false;
+       let obstacleTimer = 0;
+       let obstacleSpawnInterval = 1000;
+       let lastTimestamp = 0;
+       let highscore = localStorage.getItem('catRunnerHighScore') || 0;
 
-        <!-- Updated credit line -->
-        <p class="text-center text-sm font-semibold text-gray-500 mt-6">Created by Abhinav Yaduvanshi</p>
-    </div>
+       // --- Cat State and Appearance ---
+       const catStates = {
+           running: { color: '#fdd835', size: { width: 40, height: 60 } },
+           jumping: { color: '#ffeb3b', size: { width: 40, height: 60 } },
+           ducking: { color: '#ffc107', size: { width: 60, height: 40 } },
+           collision: { color: '#d32f2f' }
+       };
 
-    <script>
-        // Canvas and context
-        const canvas = document.getElementById('simulationCanvas');
-        const ctx = canvas.getContext('2d');
-        const parentDiv = canvas.parentElement;
+       // --- Sound Effects Setup using Tone.js ---
+       const jumpSound = new Tone.Synth({
+           oscillator: { type: "square" },
+           envelope: {
+               attack: 0.005,
+               decay: 0.1,
+               sustain: 0,
+               release: 0.1
+           }
+       }).toDestination();
 
-        // UI Elements
-        const boatSpeedSlider = document.getElementById('boatSpeedSlider');
-        const boatSpeedValue = document.getElementById('boatSpeedValue');
-        const riverSpeedSlider = document.getElementById('riverSpeedSlider');
-        const riverSpeedValue = document.getElementById('riverSpeedValue');
-        const angleSlider = document.getElementById('angleSlider');
-        const angleValue = document.getElementById('angleValue');
-        const startButton = document.getElementById('startButton');
-        const optimalButton = document.getElementById('optimalButton');
-        const driftValue = document.getElementById('driftValue');
-        const infoBox = document.getElementById('infoBox');
-        const historyList = document.getElementById('historyList');
-        const clearHistoryButton = document.getElementById('clearHistoryButton');
+       const collisionSound = new Tone.NoiseSynth({
+           noise: { type: "white" },
+           envelope: {
+               attack: 0.001,
+               decay: 0.1,
+               sustain: 0.1,
+               release: 0.1
+           }
+       }).toDestination();
+       
+       const backgroundMusic = new Tone.Loop(time => {
+           // A simple, repeating tone for background music
+           Tone.Transport.bpm.value = 120 + score / 100;
+           new Tone.Synth().triggerAttackRelease("C4", "8n", time);
+           new Tone.Synth().triggerAttackRelease("G4", "8n", time + 0.25);
+           new Tone.Synth().triggerAttackRelease("A4", "8n", time + 0.5);
+           new Tone.Synth().triggerAttackRelease("F4", "8n", time + 0.75);
+       }, "1m").start(0);
 
-        // Simulation parameters
-        let boatSpeed = 50;
-        let riverSpeed = 100;
-        const BANK_HEIGHT = 48;
-        let riverWidth;
-        
-        let boat = { x: 0, y: 0, angle: 0 };
-        let path = [];
-        let animationFrameId;
-        let lastTime = 0;
-        let isAnimating = false;
-        let simulationHistory = [];
+       // --- Game Logic Functions ---
 
-        // --- Setup and Update ---
-        function updateParameters() {
-            boatSpeed = parseInt(boatSpeedSlider.value);
-            boatSpeedValue.textContent = boatSpeed;
-            riverSpeed = parseInt(riverSpeedSlider.value);
-            riverSpeedValue.textContent = riverSpeed;
-            angleValue.textContent = `${angleSlider.value}°`;
-            infoBox.textContent = '';
-            resetSimulation();
-        }
+       /**
+        * Initializes or resets the game state.
+        */
+       function init() {
+           // Set initial state
+           isJumping = false;
+           isDucking = false;
+           isRunning = true;
+           score = 0;
+           gameSpeed = 1;
+           obstacles = [];
+           
+           // UI updates
+           scoreSpan.textContent = score;
+           highScoreSpan.textContent = highscore;
+           gameOverScreen.style.display = 'none';
 
-        function resizeCanvas() {
-            canvas.width = parentDiv.clientWidth;
-            canvas.height = parentDiv.clientHeight;
-            riverWidth = canvas.height - (2 * BANK_HEIGHT);
-            resetSimulation();
-        }
+           // Matter.js setup
+           if (engine) {
+               World.clear(engine.world, false);
+               Engine.clear(engine);
+           }
+           engine = Engine.create({ gravity: { scale: 0.0015 } });
+           
+           // Responsive canvas sizing
+           resizeCanvas();
 
-        // --- Simulation Logic ---
-        function resetSimulation() {
-            if (animationFrameId) {
-                cancelAnimationFrame(animationFrameId);
-                animationFrameId = null;
-            }
-            isAnimating = false;
-            boat.x = canvas.width / 2;
-            boat.y = canvas.height - BANK_HEIGHT;
-            boat.angle = parseInt(angleSlider.value) * (Math.PI / 180);
-            path = [{x: boat.x, y: boat.y}];
-            lastTime = 0;
-            driftValue.textContent = "Drift: ---";
-            draw();
-        }
+           render = Render.create({
+               canvas: canvas,
+               engine: engine,
+               options: {
+                   width: canvas.width,
+                   height: canvas.height,
+                   showVelocity: false,
+                   showCollisions: false,
+                   wireframes: false,
+                   background: 'transparent'
+               }
+           });
 
-        function animate(timestamp) {
-            if (!isAnimating) return;
-            if (lastTime === 0) lastTime = timestamp;
-            const deltaTime = (timestamp - lastTime) / 1000;
+           // Create game objects
+           ground = Bodies.rectangle(canvas.width / 2, canvas.height - 20, canvas.width, 40, {
+               isStatic: true,
+               render: { fillStyle: '#4caf50' }
+           });
 
-            const boatVx_rel_water = boatSpeed * Math.cos(boat.angle);
-            const boatVy_rel_water = -boatSpeed * Math.sin(boat.angle);
-            const resultantVx = boatVx_rel_water + riverSpeed;
-            const resultantVy = boatVy_rel_water;
+           cat = Bodies.rectangle(100, canvas.height - 40 - 30, catStates.running.size.width, catStates.running.size.height, {
+               inertia: Infinity, // Prevent rotation
+               label: 'cat'
+           });
 
-            boat.x += resultantVx * deltaTime;
-            boat.y += resultantVy * deltaTime;
-            path.push({x: boat.x, y: boat.y});
-            draw();
+           World.add(engine.world, [ground, cat]);
+           
+           // Start the physics runner
+           runner = Runner.run(engine);
+           Render.run(render);
+           
+           // Start background music
+           Tone.Transport.start();
+       }
 
-            if (boat.y > BANK_HEIGHT) {
-                animationFrameId = requestAnimationFrame(animate);
-            } else {
-                isAnimating = false;
-                const finalDrift = boat.x - (canvas.width / 2);
-                const driftColor = Math.abs(finalDrift) < 1 ? 'text-green-500' : 'text-red-500';
-                driftValue.innerHTML = `Drift: <span class="${driftColor}">${finalDrift.toFixed(1)} px</span>`;
-                logHistory(finalDrift);
-            }
-        }
-        
-        function calculateAndSetOptimalAngle() {
-            let optimalAngleRad;
-            let infoText = '';
-            if (boatSpeed > riverSpeed) {
-                optimalAngleRad = Math.acos(-riverSpeed / boatSpeed);
-                infoText = `Optimal for ZERO drift: ${(optimalAngleRad * 180 / Math.PI).toFixed(1)}°`;
-            } else {
-                optimalAngleRad = Math.acos(-boatSpeed / riverSpeed);
-                infoText = `Optimal for MINIMUM drift: ${(optimalAngleRad * 180 / Math.PI).toFixed(1)}°`;
-            }
-            angleSlider.value = optimalAngleRad * 180 / Math.PI;
-            angleValue.textContent = `${Math.round(angleSlider.value)}°`;
-            infoBox.textContent = infoText;
-            resetSimulation();
-        }
+       /**
+        * Resizes the canvas to fit the container.
+        */
+       function resizeCanvas() {
+           const rect = gameContainer.getBoundingClientRect();
+           canvas.width = rect.width;
+           canvas.height = rect.height;
+       }
 
-        // --- History Logic ---
-        function logHistory(drift) {
-            const result = {
-                boatSpeed: boatSpeed,
-                riverSpeed: riverSpeed,
-                angle: Math.round(angleSlider.value),
-                drift: drift.toFixed(1)
-            };
-            simulationHistory.unshift(result); // Add to the beginning
-            if (simulationHistory.length > 10) { // Keep last 10 results
-                simulationHistory.pop();
-            }
-            updateHistoryDisplay();
-        }
+       /**
+        * The main game loop.
+        */
+       function gameLoop(timestamp) {
+           if (!isRunning) return;
+           
+           const deltaTime = timestamp - lastTimestamp;
+           lastTimestamp = timestamp;
 
-        function updateHistoryDisplay() {
-            historyList.innerHTML = '';
-            if (simulationHistory.length === 0) {
-                historyList.innerHTML = '<li class="text-gray-500 text-center italic">Run a simulation to see results here.</li>';
-                return;
-            }
-            simulationHistory.forEach(result => {
-                const li = document.createElement('li');
-                li.className = 'history-item p-2 rounded-md grid grid-cols-4 gap-2 text-xs sm:text-sm text-gray-700 border-b';
-                
-                const driftColor = Math.abs(result.drift) < 1 ? 'text-green-600' : 'text-red-600';
+           // Update game logic
+           updateGame(deltaTime);
 
-                li.innerHTML = `
-                    <span>Boat: <b class="text-blue-600">${result.boatSpeed}</b></span>
-                    <span>River: <b class="text-green-600">${result.riverSpeed}</b></span>
-                    <span>Angle: <b class="text-purple-600">${result.angle}°</b></span>
-                    <span>Drift: <b class="${driftColor} font-bold">${result.drift}</b></span>
-                `;
-                historyList.appendChild(li);
-            });
-        }
+           // Render custom sprites/shapes
+           drawObjects();
 
-        // --- Drawing Functions ---
-        function draw() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            drawWater();
-            drawPath();
-            drawBoat();
-            if (!isAnimating) {
-                drawVectors();
-            }
-        }
-        
-        function drawWater() {
-            const waterAnimationOffset = (performance.now() / 20) % 40;
-            ctx.fillStyle = '#a1d8f0';
-            ctx.fillRect(0, BANK_HEIGHT, canvas.width, riverWidth);
-            ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
-            ctx.lineWidth = 1;
-            for(let i = 0; i < 15; i++) {
-                const y = BANK_HEIGHT + (i / 15) * riverWidth;
-                ctx.beginPath();
-                ctx.moveTo(-40 + waterAnimationOffset, y);
-                for(let j = 0; j < canvas.width / 40 + 2; j++){
-                    ctx.lineTo(j*40 - 40 + waterAnimationOffset, y + Math.sin(j + performance.now()/500)*2);
-                }
-                ctx.stroke();
-            }
-        }
+           requestAnimationFrame(gameLoop);
+       }
 
-        function drawPath() {
-            if(path.length < 2) return;
-            ctx.beginPath();
-            ctx.moveTo(path[0].x, path[0].y);
-            for (let i = 1; i < path.length; i++) {
-                ctx.lineTo(path[i].x, path[i].y);
-            }
-            ctx.strokeStyle = 'rgba(220, 38, 38, 0.8)';
-            ctx.lineWidth = 3;
-            ctx.lineCap = 'round';
-            ctx.lineJoin = 'round';
-            ctx.stroke();
-        }
+       /**
+        * Updates game state, score, and obstacle generation.
+        */
+       function updateGame(deltaTime) {
+           score += Math.floor(deltaTime * gameSpeed / 100);
+           scoreSpan.textContent = score;
+           gameSpeed += 0.0001; // Increase speed over time
 
-        function drawBoat() {
-            const boatLength = 20;
-            const boatWidth = 10;
-            ctx.save();
-            ctx.translate(boat.x, boat.y);
-            
-            const boatVy_rel_water = -boatSpeed * Math.sin(boat.angle);
-            const resultantVx = boatSpeed * Math.cos(boat.angle) + riverSpeed;
-            const resultantAngle = Math.atan2(boatVy_rel_water, resultantVx);
+           obstacleTimer += deltaTime * gameSpeed;
+           if (obstacleTimer > obstacleSpawnInterval) {
+               spawnObstacle();
+               obstacleTimer = 0;
+               obstacleSpawnInterval = 1000 / gameSpeed;
+           }
 
-            ctx.rotate(resultantAngle);
-            
-            ctx.fillStyle = '#8B4513';
-            ctx.beginPath();
-            ctx.moveTo(-boatLength / 2, 0);
-            ctx.lineTo(boatLength / 4, -boatWidth / 2);
-            ctx.lineTo(boatLength / 2, 0);
-            ctx.lineTo(boatLength / 4, boatWidth / 2);
-            ctx.closePath();
-            ctx.fill();
-            ctx.strokeStyle = '#5C2F0E';
-            ctx.stroke();
+           // Move obstacles and check if they are off-screen
+           obstacles.forEach(obstacle => {
+               Body.setVelocity(obstacle, { x: -3 * gameSpeed, y: obstacle.velocity.y });
+           });
 
-            ctx.fillStyle = '#D2B48C';
-            ctx.fillRect(-boatLength / 4, -boatWidth / 4, boatLength / 4, boatWidth / 2);
-            ctx.strokeRect(-boatLength / 4, -boatWidth / 4, boatLength / 4, boatWidth / 2);
-            ctx.restore();
-        }
+           // Remove off-screen obstacles to prevent performance issues
+           obstacles = obstacles.filter(obstacle => {
+               const isOffScreen = obstacle.position.x < -50;
+               if (isOffScreen) {
+                   World.remove(engine.world, obstacle);
+               }
+               return !isOffScreen;
+           });
+       }
 
-        function drawVectors() {
-            const origin = { x: boat.x, y: boat.y };
-            const scale = 0.3;
-            drawVector(origin, boat.angle, boatSpeed * scale, '#60a5fa', 'v_boat');
-            drawVector(origin, 0, riverSpeed * scale, '#34d399', 'v_river');
-            const boatVx_rel_water = boatSpeed * Math.cos(boat.angle);
-            const boatVy_rel_water = -boatSpeed * Math.sin(boat.angle);
-            const resultantVx = boatVx_rel_water + riverSpeed;
-            const resultantVy = boatVy_rel_water;
-            const resultantMagnitude = Math.sqrt(resultantVx**2 + resultantVy**2);
-            const resultantAngle = Math.atan2(resultantVy, resultantVx);
-            drawVector(origin, resultantAngle, resultantMagnitude * scale, '#f87171', 'v_resultant');
-        }
+       /**
+        * Spawns a new obstacle at a random interval.
+        */
+       function spawnObstacle() {
+           const random = Math.random();
+           let obstacle;
+           let obstacleWidth;
+           let obstacleHeight;
+           let obstacleType = Math.floor(Math.random() * 4);
+           const obstacleX = canvas.width + 50;
 
-        function drawVector(start, angle, magnitude, color, label) {
-            const endX = start.x + magnitude * Math.cos(angle);
-            const endY = start.y + magnitude * Math.sin(angle);
-            ctx.beginPath();
-            ctx.moveTo(start.x, start.y);
-            ctx.lineTo(endX, endY);
-            ctx.strokeStyle = color;
-            ctx.lineWidth = 3;
-            ctx.stroke();
-            ctx.save();
-            ctx.translate(endX, endY);
-            ctx.rotate(angle);
-            ctx.beginPath();
-            ctx.moveTo(0, 0);
-            ctx.lineTo(-10, -5);
-            ctx.lineTo(-10, 5);
-            ctx.closePath();
-            ctx.fillStyle = color;
-            ctx.fill();
-            ctx.restore();
-            ctx.fillStyle = color;
-            ctx.font = 'bold 14px Inter';
-            ctx.fillText(label, endX + 10, endY);
-        }
+           switch (obstacleType) {
+               case 0: // Fence (a tall, thin obstacle)
+                   obstacleWidth = 20;
+                   obstacleHeight = 50;
+                   obstacle = Bodies.rectangle(obstacleX, canvas.height - 20 - (obstacleHeight / 2), obstacleWidth, obstacleHeight, {
+                       isStatic: false,
+                       label: 'obstacle',
+                       restitution: 0.1,
+                       render: { fillStyle: '#bcaaa4' }
+                   });
+                   break;
+               case 1: // Puddle (a low, wide obstacle, easy to jump over)
+                   obstacleWidth = 60;
+                   obstacleHeight = 20;
+                   obstacle = Bodies.rectangle(obstacleX, canvas.height - 20 - (obstacleHeight / 2), obstacleWidth, obstacleHeight, {
+                       isStatic: false,
+                       label: 'obstacle',
+                       restitution: 0.8, // Bouncy
+                       render: { fillStyle: '#2196f3' }
+                   });
+                   break;
+               case 2: // Dog (a medium-sized moving obstacle)
+                   obstacleWidth = 40;
+                   obstacleHeight = 40;
+                   obstacle = Bodies.rectangle(obstacleX, canvas.height - 20 - (obstacleHeight / 2), obstacleWidth, obstacleHeight, {
+                       isStatic: false,
+                       label: 'obstacle',
+                       restitution: 0.2,
+                       render: { fillStyle: '#795548' }
+                   });
+                   break;
+               case 3: // Bird (an obstacle that requires a low duck)
+                   obstacleWidth = 30;
+                   obstacleHeight = 30;
+                   obstacle = Bodies.rectangle(obstacleX, canvas.height - 20 - 70 - (obstacleHeight / 2), obstacleWidth, obstacleHeight, {
+                       isStatic: false,
+                       label: 'obstacle',
+                       restitution: 0.1,
+                       render: { fillStyle: '#f44336' }
+                   });
+                   break;
+           }
 
-        // --- Event Listeners ---
-        [boatSpeedSlider, riverSpeedSlider, angleSlider].forEach(slider => {
-            slider.addEventListener('input', updateParameters);
-        });
-        startButton.addEventListener('click', () => {
-            if (!isAnimating) {
-                resetSimulation();
-                isAnimating = true;
-                lastTime = 0;
-                animationFrameId = requestAnimationFrame(animate);
-            }
-        });
-        optimalButton.addEventListener('click', calculateAndSetOptimalAngle);
-        clearHistoryButton.addEventListener('click', () => {
-            simulationHistory = [];
-            updateHistoryDisplay();
-        });
-        window.addEventListener('resize', resizeCanvas);
+           if (obstacle) {
+               obstacles.push(obstacle);
+               World.add(engine.world, obstacle);
+           }
+       }
 
-        // Initial setup
-        resizeCanvas();
-        updateParameters();
-    </script>
+       /**
+        * Handles drawing all objects on the canvas, including custom cat rendering.
+        */
+       function drawObjects() {
+           // Clear the canvas
+           context.clearRect(0, 0, canvas.width, canvas.height);
+
+           // Cat's Body
+           context.fillStyle = isJumping ? catStates.jumping.color : (isDucking ? catStates.ducking.color : catStates.running.color);
+           context.beginPath();
+           context.roundRect(cat.position.x - cat.bounds.width / 2, cat.position.y - cat.bounds.height / 2, cat.bounds.width, cat.bounds.height, 10);
+           context.fill();
+           
+           // Cat's eye (simple circle)
+           context.fillStyle = '#000';
+           context.beginPath();
+           context.arc(cat.position.x + cat.bounds.width / 4, cat.position.y - cat.bounds.height / 4, 3, 0, 2 * Math.PI);
+           context.fill();
+
+           // Matter.js automatically handles rendering the ground and obstacles
+           // The renderer is already running, so we don't need to manually draw them here.
+       }
+
+       /**
+        * Manages game state on collision.
+        */
+       function handleCollisions(event) {
+           const pairs = event.pairs;
+           for (const pair of pairs) {
+               const bodyA = pair.bodyA;
+               const bodyB = pair.bodyB;
+
+               if ((bodyA.label === 'cat' && bodyB.label === 'obstacle') ||
+                   (bodyB.label === 'cat' && bodyA.label === 'obstacle')) {
+                   // Game Over
+                   collisionSound.triggerAttackRelease("8n");
+                   endGame();
+               }
+           }
+       }
+
+       /**
+        * Ends the game and displays the final score.
+        */
+       function endGame() {
+           isRunning = false;
+           Tone.Transport.stop();
+           Runner.stop(runner);
+           
+           finalScoreSpan.textContent = score;
+           gameOverScreen.style.display = 'flex';
+           
+           if (score > highscore) {
+               highscore = score;
+               localStorage.setItem('catRunnerHighScore', highscore);
+               highScoreSpan.textContent = highscore;
+           }
+       }
+
+       // --- Event Listeners and Game Control ---
+       
+       // Restart button
+       restartBtn.addEventListener('click', () => {
+           init();
+           requestAnimationFrame(gameLoop);
+       });
+
+       // Keyboard controls
+       document.addEventListener('keydown', (e) => {
+           if (!isRunning) return;
+
+           if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') {
+               if (!isJumping) {
+                   Body.setVelocity(cat, { x: cat.velocity.x, y: 0 }); // Reset vertical velocity
+                   Body.applyForce(cat, cat.position, { x: 0, y: -0.1 });
+                   isJumping = true;
+                   jumpSound.triggerAttackRelease("C5", "8n");
+               }
+           } else if (e.code === 'ArrowDown' || e.code === 'KeyS') {
+               if (!isDucking && !isJumping) {
+                   Body.scale(cat, 1, 0.5);
+                   isDucking = true;
+               }
+           }
+       });
+
+       document.addEventListener('keyup', (e) => {
+           if (e.code === 'ArrowDown' || e.code === 'KeyS') {
+               if (isDucking) {
+                   Body.scale(cat, 1, 2);
+                   isDucking = false;
+               }
+           }
+       });
+
+       // Reset jumping state on landing
+       Events.on(engine, 'collisionStart', (event) => {
+           const pairs = event.pairs;
+           for (const pair of pairs) {
+               const bodyA = pair.bodyA;
+               const bodyB = pair.bodyB;
+               if (bodyA.label === 'cat' && bodyB.label !== 'obstacle' || bodyB.label === 'cat' && bodyA.label !== 'obstacle') {
+                   isJumping = false;
+               }
+           }
+       });
+
+       // Window resize event
+       window.addEventListener('resize', resizeCanvas);
+       
+       // Collision detection event
+       Events.on(engine, 'collisionStart', handleCollisions);
+
+       // Initial setup and start the game loop
+       window.onload = function() {
+           init();
+           requestAnimationFrame(gameLoop);
+       };
+   </script>
 </body>
 </html>
-
-
