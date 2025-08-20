@@ -1,531 +1,576 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-   <meta charset="UTF-8">
-   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-   <title>Cat Runner</title>
-   <style>
-       @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
-       
-       :root {
-           --bg-color: #e0f7fa;
-           --main-color: #263238;
-           --accent-color: #ff9800;
-       }
+import React, { useEffect, useRef, useState } from "react";
 
-       body {
-           font-family: 'Press Start 2P', cursive;
-           background-color: var(--bg-color);
-           color: var(--main-color);
-           display: flex;
-           justify-content: center;
-           align-items: center;
-           height: 100vh;
-           margin: 0;
-           overflow: hidden;
-           flex-direction: column;
-       }
+/**
 
-       #game-container {
-           position: relative;
-           border: 5px solid var(--main-color);
-           box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
-           border-radius: 15px;
-           overflow: hidden;
-           background: linear-gradient(to bottom, #87ceeb, #e0f7fa);
-           width: 90vw;
-           height: 50vw;
-           max-width: 900px;
-           max-height: 500px;
-       }
+Cat Runner — a Chrome Dino–style endless runner with a cat and advanced-feel physics.
 
-       canvas {
-           display: block;
-           width: 100%;
-           height: 100%;
-       }
+Single-file React component. Uses <canvas> for rendering and Tailwind for UI.
 
-       #ui-overlay {
-           position: absolute;
-           top: 0;
-           left: 0;
-           width: 100%;
-           height: 100%;
-           display: flex;
-           flex-direction: column;
-           justify-content: space-between;
-           align-items: center;
-           padding: 1rem;
-           box-sizing: border-box;
-           pointer-events: none; /* Allows clicks to pass through to the canvas */
-       }
+Controls:
 
-       .score-display {
-           display: flex;
-           width: 100%;
-           justify-content: flex-end;
-           gap: 2rem;
-       }
+Jump: Space / W / ArrowUp / Tap/Click
 
-       .score-item {
-           font-size: 1.5rem;
-           text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
-       }
 
-       #game-over-screen {
-           position: absolute;
-           top: 0;
-           left: 0;
-           width: 100%;
-           height: 100%;
-           background-color: rgba(255, 255, 255, 0.9);
-           display: none;
-           flex-direction: column;
-           justify-content: center;
-           align-items: center;
-           text-align: center;
-           border-radius: 15px;
-           pointer-events: all;
-       }
+Crouch: S / ArrowDown (hold)
 
-       #game-over-screen h2 {
-           font-size: 2.5rem;
-           margin-bottom: 1rem;
-           color: var(--accent-color);
-       }
 
-       #game-over-screen p {
-           font-size: 1.2rem;
-           margin-bottom: 2rem;
-       }
+Pause/Resume: P
 
-       #restart-btn {
-           background-color: var(--main-color);
-           color: #fff;
-           padding: 1rem 2rem;
-           border-radius: 50px;
-           font-family: 'Press Start 2P', cursive;
-           font-size: 1rem;
-           border: none;
-           cursor: pointer;
-           transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
-           box-shadow: 0 5px 10px rgba(0,0,0,0.2);
-       }
 
-       #restart-btn:hover {
-           transform: translateY(-3px);
-           box-shadow: 0 8px 15px rgba(0,0,0,0.3);
-       }
+Restart: R or click the on-screen button
 
-       #cat-sprite-container {
-           position: absolute;
-           bottom: 0;
-           left: 10%;
-           width: 80px;
-           height: 80px;
-           transform-origin: bottom;
-       }
-       
-       .hidden {
-           display: none;
-       }
 
-       .jump-animation {
-           animation: jump-arc 0.5s ease-out;
-       }
+Physics/Gameplay Features:
 
-       @keyframes jump-arc {
-           0% { transform: translateY(0); }
-           50% { transform: translateY(-100px); }
-           100% { transform: translateY(0); }
-       }
-   </style>
-</head>
-<body>
-   <div id="game-container">
-       <canvas id="game-canvas"></canvas>
-       <div id="ui-overlay">
-           <div class="score-display">
-               <div class="score-item">HI <span id="high-score">0</span></div>
-               <div class="score-item">SCORE <span id="current-score">0</span></div>
-           </div>
-           <div id="game-over-screen">
-               <h2>GAME OVER</h2>
-               <p>Score: <span id="final-score">0</span></p>
-               <button id="restart-btn">RESTART</button>
-           </div>
-       </div>
-   </div>
+Fixed-timestep integrator (semi-implicit Euler @ 120 Hz)
 
-   <!-- External Libraries -->
-   <script src="https://cdn.jsdelivr.net/npm/matter-js@0.19.0/build/matter.min.js"></script>
-   <script src="https://cdn.jsdelivr.net/npm/tone@14.7.58/build/Tone.min.js"></script>
 
-   <script>
-       // --- Core Game Setup ---
-       const gameContainer = document.getElementById('game-container');
-       const canvas = document.getElementById('game-canvas');
-       const context = canvas.getContext('2d');
-       const gameOverScreen = document.getElementById('game-over-screen');
-       const restartBtn = document.getElementById('restart-btn');
-       const scoreSpan = document.getElementById('current-score');
-       const highScoreSpan = document.getElementById('high-score');
-       const finalScoreSpan = document.getElementById('final-score');
+Variable jump height (jump cut on early release)
 
-       // --- Physics Engine Initialization ---
-       const { Engine, Render, World, Bodies, Events, Runner, Body } = Matter;
-       let engine;
-       let render;
-       let runner;
-       let cat;
-       let ground;
-       let obstacles = [];
-       let gameSpeed = 1;
-       let score = 0;
-       let isRunning = false;
-       let isJumping = false;
-       let isDucking = false;
-       let obstacleTimer = 0;
-       let obstacleSpawnInterval = 1000;
-       let lastTimestamp = 0;
-       let highscore = localStorage.getItem('catRunnerHighScore') || 0;
 
-       // --- Cat State and Appearance ---
-       const catStates = {
-           running: { color: '#fdd835', size: { width: 40, height: 60 } },
-           jumping: { color: '#ffeb3b', size: { width: 40, height: 60 } },
-           ducking: { color: '#ffc107', size: { width: 60, height: 40 } },
-           collision: { color: '#d32f2f' }
-       };
+Coyote time + jump buffering
 
-       // --- Sound Effects Setup using Tone.js ---
-       const jumpSound = new Tone.Synth({
-           oscillator: { type: "square" },
-           envelope: {
-               attack: 0.005,
-               decay: 0.1,
-               sustain: 0,
-               release: 0.1
-           }
-       }).toDestination();
 
-       const collisionSound = new Tone.NoiseSynth({
-           noise: { type: "white" },
-           envelope: {
-               attack: 0.001,
-               decay: 0.1,
-               sustain: 0.1,
-               release: 0.1
-           }
-       }).toDestination();
-       
-       const backgroundMusic = new Tone.Loop(time => {
-           // A simple, repeating tone for background music
-           Tone.Transport.bpm.value = 120 + score / 100;
-           new Tone.Synth().triggerAttackRelease("C4", "8n", time);
-           new Tone.Synth().triggerAttackRelease("G4", "8n", time + 0.25);
-           new Tone.Synth().triggerAttackRelease("A4", "8n", time + 0.5);
-           new Tone.Synth().triggerAttackRelease("F4", "8n", time + 0.75);
-       }, "1m").start(0);
+Air/ground friction & terminal velocity
 
-       // --- Game Logic Functions ---
 
-       /**
-        * Initializes or resets the game state.
-        */
-       function init() {
-           // Set initial state
-           isJumping = false;
-           isDucking = false;
-           isRunning = true;
-           score = 0;
-           gameSpeed = 1;
-           obstacles = [];
-           
-           // UI updates
-           scoreSpan.textContent = score;
-           highScoreSpan.textContent = highscore;
-           gameOverScreen.style.display = 'none';
+Difficulty scaling (world speed & obstacle frequency)
 
-           // Matter.js setup
-           if (engine) {
-               World.clear(engine.world, false);
-               Engine.clear(engine);
-           }
-           engine = Engine.create({ gravity: { scale: 0.0015 } });
-           
-           // Responsive canvas sizing
-           resizeCanvas();
 
-           render = Render.create({
-               canvas: canvas,
-               engine: engine,
-               options: {
-                   width: canvas.width,
-                   height: canvas.height,
-                   showVelocity: false,
-                   showCollisions: false,
-                   wireframes: false,
-                   background: 'transparent'
-               }
-           });
+Parallax background & particle effects
 
-           // Create game objects
-           ground = Bodies.rectangle(canvas.width / 2, canvas.height - 20, canvas.width, 40, {
-               isStatic: true,
-               render: { fillStyle: '#4caf50' }
-           });
 
-           cat = Bodies.rectangle(100, canvas.height - 40 - 30, catStates.running.size.width, catStates.running.size.height, {
-               inertia: Infinity, // Prevent rotation
-               label: 'cat'
-           });
+Simple continuous feel by small dt to avoid tunneling
 
-           World.add(engine.world, [ground, cat]);
-           
-           // Start the physics runner
-           runner = Runner.run(engine);
-           Render.run(render);
-           
-           // Start background music
-           Tone.Transport.start();
-       }
 
-       /**
-        * Resizes the canvas to fit the container.
-        */
-       function resizeCanvas() {
-           const rect = gameContainer.getBoundingClientRect();
-           canvas.width = rect.width;
-           canvas.height = rect.height;
-       }
+Mobile-friendly input (touch) */
 
-       /**
-        * The main game loop.
-        */
-       function gameLoop(timestamp) {
-           if (!isRunning) return;
-           
-           const deltaTime = timestamp - lastTimestamp;
-           lastTimestamp = timestamp;
 
-           // Update game logic
-           updateGame(deltaTime);
 
-           // Render custom sprites/shapes
-           drawObjects();
+export default function CatRunner() { const canvasRef = useRef(null); const [running, setRunning] = useState(true); const [gameOver, setGameOver] = useState(false); const [score, setScore] = useState(0); const [high, setHigh] = useState(0);
 
-           requestAnimationFrame(gameLoop);
-       }
+// Game state kept outside React for perf const stateRef = useRef(null); const inputRef = useRef({ jumpPressed: false, jumpHeld: false, downHeld: false, clickQueued: false });
 
-       /**
-        * Updates game state, score, and obstacle generation.
-        */
-       function updateGame(deltaTime) {
-           score += Math.floor(deltaTime * gameSpeed / 100);
-           scoreSpan.textContent = score;
-           gameSpeed += 0.0001; // Increase speed over time
+// --- Constants (tweak for feel) --- const GROUND_Y = 320; // world pixels const BASE_SPEED = 360; // px/s world scroll speed const MAX_SPEED = 800; const GRAVITY = 2600; // px/s^2 const JUMP_V = -1050; // initial jump vel const JUMP_CUT = 0.45; // multiplier when releasing early const COYOTE = 0.1; // s const BUFFER = 0.12; // s const AIR_DRAG = 0.0008; // proportional to v^2 sign(v) const GROUND_FRICTION = 2200; const TERMINAL = 2000;
 
-           obstacleTimer += deltaTime * gameSpeed;
-           if (obstacleTimer > obstacleSpawnInterval) {
-               spawnObstacle();
-               obstacleTimer = 0;
-               obstacleSpawnInterval = 1000 / gameSpeed;
-           }
+// Utilities const rand = (min, max) => Math.random() * (max - min) + min; const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
 
-           // Move obstacles and check if they are off-screen
-           obstacles.forEach(obstacle => {
-               Body.setVelocity(obstacle, { x: -3 * gameSpeed, y: obstacle.velocity.y });
-           });
+// Cat sprite + collider function drawCat(ctx, x, y, crouch, t) { ctx.save(); ctx.translate(x, y); // Bobbing tail const tailSwing = Math.sin(t * 8) * (crouch ? 2 : 6);
 
-           // Remove off-screen obstacles to prevent performance issues
-           obstacles = obstacles.filter(obstacle => {
-               const isOffScreen = obstacle.position.x < -50;
-               if (isOffScreen) {
-                   World.remove(engine.world, obstacle);
-               }
-               return !isOffScreen;
-           });
-       }
+// Shadow
+ctx.fillStyle = "rgba(0,0,0,0.2)";
+ctx.beginPath();
+ctx.ellipse(0, 26, 24, 8, 0, 0, Math.PI * 2);
+ctx.fill();
 
-       /**
-        * Spawns a new obstacle at a random interval.
-        */
-       function spawnObstacle() {
-           const random = Math.random();
-           let obstacle;
-           let obstacleWidth;
-           let obstacleHeight;
-           let obstacleType = Math.floor(Math.random() * 4);
-           const obstacleX = canvas.width + 50;
+// Body
+ctx.fillStyle = "#2d2d2d";
+ctx.strokeStyle = "#111";
+ctx.lineWidth = 2;
 
-           switch (obstacleType) {
-               case 0: // Fence (a tall, thin obstacle)
-                   obstacleWidth = 20;
-                   obstacleHeight = 50;
-                   obstacle = Bodies.rectangle(obstacleX, canvas.height - 20 - (obstacleHeight / 2), obstacleWidth, obstacleHeight, {
-                       isStatic: false,
-                       label: 'obstacle',
-                       restitution: 0.1,
-                       render: { fillStyle: '#bcaaa4' }
-                   });
-                   break;
-               case 1: // Puddle (a low, wide obstacle, easy to jump over)
-                   obstacleWidth = 60;
-                   obstacleHeight = 20;
-                   obstacle = Bodies.rectangle(obstacleX, canvas.height - 20 - (obstacleHeight / 2), obstacleWidth, obstacleHeight, {
-                       isStatic: false,
-                       label: 'obstacle',
-                       restitution: 0.8, // Bouncy
-                       render: { fillStyle: '#2196f3' }
-                   });
-                   break;
-               case 2: // Dog (a medium-sized moving obstacle)
-                   obstacleWidth = 40;
-                   obstacleHeight = 40;
-                   obstacle = Bodies.rectangle(obstacleX, canvas.height - 20 - (obstacleHeight / 2), obstacleWidth, obstacleHeight, {
-                       isStatic: false,
-                       label: 'obstacle',
-                       restitution: 0.2,
-                       render: { fillStyle: '#795548' }
-                   });
-                   break;
-               case 3: // Bird (an obstacle that requires a low duck)
-                   obstacleWidth = 30;
-                   obstacleHeight = 30;
-                   obstacle = Bodies.rectangle(obstacleX, canvas.height - 20 - 70 - (obstacleHeight / 2), obstacleWidth, obstacleHeight, {
-                       isStatic: false,
-                       label: 'obstacle',
-                       restitution: 0.1,
-                       render: { fillStyle: '#f44336' }
-                   });
-                   break;
-           }
+// Tail
+ctx.save();
+ctx.translate(-24, 4);
+ctx.rotate((tailSwing * Math.PI) / 180);
+roundedRect(ctx, -18, -4, 24, 8, 4);
+ctx.fill();
+ctx.stroke();
+ctx.restore();
 
-           if (obstacle) {
-               obstacles.push(obstacle);
-               World.add(engine.world, obstacle);
-           }
-       }
+// Torso
+roundedRect(ctx, -18, -10, 36, 22, 8);
+ctx.fill();
+ctx.stroke();
 
-       /**
-        * Handles drawing all objects on the canvas, including custom cat rendering.
-        */
-       function drawObjects() {
-           // Clear the canvas
-           context.clearRect(0, 0, canvas.width, canvas.height);
+// Head
+ctx.save();
+ctx.translate(18, -6);
+roundedRect(ctx, -12, -10, 22, 20, 6);
+ctx.fill();
+ctx.stroke();
 
-           // Cat's Body
-           context.fillStyle = isJumping ? catStates.jumping.color : (isDucking ? catStates.ducking.color : catStates.running.color);
-           context.beginPath();
-           context.roundRect(cat.position.x - cat.bounds.width / 2, cat.position.y - cat.bounds.height / 2, cat.bounds.width, cat.bounds.height, 10);
-           context.fill();
-           
-           // Cat's eye (simple circle)
-           context.fillStyle = '#000';
-           context.beginPath();
-           context.arc(cat.position.x + cat.bounds.width / 4, cat.position.y - cat.bounds.height / 4, 3, 0, 2 * Math.PI);
-           context.fill();
+// Ears
+ctx.beginPath();
+ctx.moveTo(-10, -10);
+ctx.lineTo(-4, -18);
+ctx.lineTo(0, -8);
+ctx.closePath();
+ctx.moveTo(6, -10);
+ctx.lineTo(10, -18);
+ctx.lineTo(12, -6);
+ctx.closePath();
+ctx.fillStyle = "#1f1f1f";
+ctx.fill();
 
-           // Matter.js automatically handles rendering the ground and obstacles
-           // The renderer is already running, so we don't need to manually draw them here.
-       }
+// Eye
+ctx.fillStyle = "#f3f99d";
+ctx.beginPath();
+ctx.arc(2, -2, 2, 0, Math.PI * 2);
+ctx.fill();
 
-       /**
-        * Manages game state on collision.
-        */
-       function handleCollisions(event) {
-           const pairs = event.pairs;
-           for (const pair of pairs) {
-               const bodyA = pair.bodyA;
-               const bodyB = pair.bodyB;
+// Nose
+ctx.fillStyle = "#f59e0b";
+ctx.fillRect(-2, 2, 3, 2);
 
-               if ((bodyA.label === 'cat' && bodyB.label === 'obstacle') ||
-                   (bodyB.label === 'cat' && bodyA.label === 'obstacle')) {
-                   // Game Over
-                   collisionSound.triggerAttackRelease("8n");
-                   endGame();
-               }
-           }
-       }
+ctx.restore();
 
-       /**
-        * Ends the game and displays the final score.
-        */
-       function endGame() {
-           isRunning = false;
-           Tone.Transport.stop();
-           Runner.stop(runner);
-           
-           finalScoreSpan.textContent = score;
-           gameOverScreen.style.display = 'flex';
-           
-           if (score > highscore) {
-               highscore = score;
-               localStorage.setItem('catRunnerHighScore', highscore);
-               highScoreSpan.textContent = highscore;
-           }
-       }
+// Legs (simple)
+const step = Math.sin(t * 18) * (crouch ? 1 : 3);
+ctx.save();
+ctx.translate(-10, 12);
+roundedRect(ctx, -3 + step, 0, 6, 12, 3);
+ctx.fill();
+ctx.translate(20, 0);
+roundedRect(ctx, -3 - step, 0, 6, 12, 3);
+ctx.fill();
+ctx.restore();
 
-       // --- Event Listeners and Game Control ---
-       
-       // Restart button
-       restartBtn.addEventListener('click', () => {
-           init();
-           requestAnimationFrame(gameLoop);
-       });
+ctx.restore();
 
-       // Keyboard controls
-       document.addEventListener('keydown', (e) => {
-           if (!isRunning) return;
+}
 
-           if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') {
-               if (!isJumping) {
-                   Body.setVelocity(cat, { x: cat.velocity.x, y: 0 }); // Reset vertical velocity
-                   Body.applyForce(cat, cat.position, { x: 0, y: -0.1 });
-                   isJumping = true;
-                   jumpSound.triggerAttackRelease("C5", "8n");
-               }
-           } else if (e.code === 'ArrowDown' || e.code === 'KeyS') {
-               if (!isDucking && !isJumping) {
-                   Body.scale(cat, 1, 0.5);
-                   isDucking = true;
-               }
-           }
-       });
+function roundedRect(ctx, x, y, w, h, r) { ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); }
 
-       document.addEventListener('keyup', (e) => {
-           if (e.code === 'ArrowDown' || e.code === 'KeyS') {
-               if (isDucking) {
-                   Body.scale(cat, 1, 2);
-                   isDucking = false;
-               }
-           }
-       });
+// Obstacle drawing function drawCactus(ctx, x, groundY, h, w) { ctx.save(); ctx.translate(x, groundY - h); ctx.fillStyle = "#0b8a5a"; roundedRect(ctx, 0, 0, w, h, 6); ctx.fill(); // Arms ctx.fillRect(w * 0.15, h * 0.35, w * 0.2, h * 0.18); ctx.fillRect(w * 0.65, h * 0.5, w * 0.2, h * 0.18); ctx.restore(); }
 
-       // Reset jumping state on landing
-       Events.on(engine, 'collisionStart', (event) => {
-           const pairs = event.pairs;
-           for (const pair of pairs) {
-               const bodyA = pair.bodyA;
-               const bodyB = pair.bodyB;
-               if (bodyA.label === 'cat' && bodyB.label !== 'obstacle' || bodyB.label === 'cat' && bodyA.label !== 'obstacle') {
-                   isJumping = false;
-               }
-           }
-       });
+function drawBird(ctx, x, y, t) { ctx.save(); ctx.translate(x, y); ctx.fillStyle = "#333"; ctx.beginPath(); ctx.ellipse(0, 0, 16, 10, 0, 0, Math.PI * 2); ctx.fill(); // Wings flapping const fl = Math.sin(t * 16) * 8 + 12; ctx.beginPath(); ctx.moveTo(-6, 0); ctx.quadraticCurveTo(-16, -fl, -28, 0); ctx.quadraticCurveTo(-16, fl, -6, 0); ctx.fill(); ctx.restore(); }
 
-       // Window resize event
-       window.addEventListener('resize', resizeCanvas);
-       
-       // Collision detection event
-       Events.on(engine, 'collisionStart', handleCollisions);
+// Init/update loop useEffect(() => { const canvas = canvasRef.current; const ctx = canvas.getContext("2d");
 
-       // Initial setup and start the game loop
-       window.onload = function() {
-           init();
-           requestAnimationFrame(gameLoop);
-       };
-   </script>
-</body>
-</html>
+// Device pixel ratio scaling
+function resize() {
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const rect = canvas.getBoundingClientRect();
+  canvas.width = Math.floor(rect.width * dpr);
+  canvas.height = Math.floor(rect.height * dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+
+const initial = {
+  t: 0,
+  speed: BASE_SPEED,
+  cat: {
+    x: 120,
+    y: GROUND_Y,
+    vy: 0,
+    onGround: true,
+    crouch: false,
+    coyoteLeft: 0,
+    bufferLeft: 0,
+  },
+  obstacles: [],
+  birds: [],
+  particles: [],
+  spawnTimer: 0,
+  birdTimer: 1.8,
+  wind: 0,
+  windTimer: 3,
+  distance: 0,
+};
+stateRef.current = initial;
+
+resize();
+const onResize = () => resize();
+window.addEventListener("resize", onResize);
+
+// Input handlers
+function onKeyDown(e) {
+  if (e.repeat) return;
+  if ([" ", "Spacebar", "ArrowUp", "w", "W"].includes(e.key)) {
+    inputRef.current.jumpPressed = true;
+    inputRef.current.jumpHeld = true;
+    e.preventDefault();
+  } else if (["ArrowDown", "s", "S"].includes(e.key)) {
+    inputRef.current.downHeld = true;
+  } else if (e.key === "p" || e.key === "P") {
+    togglePause();
+  } else if (e.key === "r" || e.key === "R") {
+    restart();
+  }
+}
+function onKeyUp(e) {
+  if ([" ", "Spacebar", "ArrowUp", "w", "W"].includes(e.key)) {
+    inputRef.current.jumpHeld = false;
+  } else if (["ArrowDown", "s", "S"].includes(e.key)) {
+    inputRef.current.downHeld = false;
+  }
+}
+
+function onPointerDown() {
+  inputRef.current.jumpPressed = true;
+  inputRef.current.jumpHeld = true;
+  inputRef.current.clickQueued = true;
+}
+function onPointerUp() {
+  inputRef.current.jumpHeld = false;
+  inputRef.current.downHeld = false;
+}
+
+window.addEventListener("keydown", onKeyDown);
+window.addEventListener("keyup", onKeyUp);
+canvas.addEventListener("pointerdown", onPointerDown);
+window.addEventListener("pointerup", onPointerUp);
+
+// Loop
+let rafId;
+let last = performance.now();
+const FIXED = 1 / 120; // 120 Hz
+let acc = 0;
+
+function step(dt) {
+  const s = stateRef.current;
+  s.t += dt;
+
+  const cat = s.cat;
+  // Difficulty scaling
+  const targetSpeed = clamp(BASE_SPEED + s.distance * 0.05, BASE_SPEED, MAX_SPEED);
+  s.speed += (targetSpeed - s.speed) * (1 - Math.exp(-dt * 0.8));
+
+  // Occasional wind gusts that modulate speed subtly
+  s.windTimer -= dt;
+  if (s.windTimer <= 0) {
+    s.wind = rand(-40, 60);
+    s.windTimer = rand(3.5, 7.5);
+  }
+  const worldSpeed = s.speed + s.wind;
+
+  // Spawn obstacles
+  s.spawnTimer -= dt;
+  if (s.spawnTimer <= 0) {
+    const gap = clamp(220 - s.speed * 0.15, 120, 220);
+    const w = rand(24, 48) * rand(1, 1.6);
+    const h = rand(38, 92);
+    s.obstacles.push({ x: 800 + w, y: GROUND_Y - h, w, h, type: "cactus" });
+    s.spawnTimer = rand(gap / 200, gap / 120);
+  }
+
+  // Spawn birds
+  s.birdTimer -= dt;
+  if (s.birdTimer <= 0) {
+    const by = GROUND_Y - rand(90, 180);
+    s.birds.push({ x: 820, y: by, v: -worldSpeed * rand(0.85, 1.15) });
+    s.birdTimer = rand(1.6, 3.2);
+  }
+
+  // Update obstacles
+  for (let i = s.obstacles.length - 1; i >= 0; i--) {
+    const o = s.obstacles[i];
+    o.x -= worldSpeed * dt;
+    if (o.x + o.w < -50) s.obstacles.splice(i, 1);
+  }
+  // Update birds
+  for (let i = s.birds.length - 1; i >= 0; i--) {
+    const b = s.birds[i];
+    b.x += b.v * dt;
+    b.y += Math.sin((s.t + i) * 2.2) * 18 * dt; // gentle bob
+    if (b.x < -80) s.birds.splice(i, 1);
+  }
+
+  // --- Cat physics ---
+  cat.crouch = inputRef.current.downHeld && cat.onGround;
+
+  // Coyote & buffer timers
+  cat.coyoteLeft = cat.onGround ? COYOTE : Math.max(0, cat.coyoteLeft - dt);
+  cat.bufferLeft = inputRef.current.jumpPressed ? BUFFER : Math.max(0, cat.bufferLeft - dt);
+  inputRef.current.jumpPressed = false;
+
+  const height = cat.crouch ? 26 : 38;
+  const width = cat.crouch ? 48 : 44;
+
+  // Jumping
+  if (cat.bufferLeft > 0 && (cat.onGround || cat.coyoteLeft > 0)) {
+    cat.vy = JUMP_V * (cat.crouch ? 0.86 : 1);
+    cat.onGround = false;
+    cat.coyoteLeft = 0;
+    cat.bufferLeft = 0;
+    // landing dust (pre-jump puff)
+    spawnDust(s, cat.x - 6, GROUND_Y, 6, 2);
+  }
+
+  // Apply gravity
+  cat.vy += GRAVITY * dt;
+
+  // Jump cut (variable height)
+  if (!inputRef.current.jumpHeld && cat.vy < 0) {
+    cat.vy += (-cat.vy) * (1 - JUMP_CUT) * 10 * dt; // soften upward vel
+  }
+
+  // Air drag
+  const drag = AIR_DRAG * cat.vy * Math.abs(cat.vy);
+  cat.vy -= Math.sign(cat.vy) * drag * dt;
+
+  // Clamp terminal velocity
+  cat.vy = clamp(cat.vy, -TERMINAL, TERMINAL);
+
+  // Integrate
+  cat.y += cat.vy * dt;
+
+  // Ground collision
+  if (cat.y > GROUND_Y) {
+    if (!cat.onGround && Math.abs(cat.vy) > 200) {
+      spawnDust(s, cat.x - 10, GROUND_Y, clamp(Math.abs(cat.vy) / 160, 6, 14), 3);
+    }
+    cat.y = GROUND_Y;
+    cat.vy = 0;
+    cat.onGround = true;
+  } else {
+    cat.onGround = false;
+  }
+
+  // Ground friction when crouching ("slide")
+  if (cat.onGround && cat.crouch) {
+    s.speed -= (s.speed - BASE_SPEED) * (1 - Math.exp(-dt * 1.6));
+  }
+
+  // Cat AABB
+  const catBox = { x: cat.x - width / 2, y: cat.y - height, w: width, h: height };
+
+  // Collisions with obstacles
+  for (let i = 0; i < s.obstacles.length; i++) {
+    const o = s.obstacles[i];
+    const hit = aabbIntersect(catBox, { x: o.x, y: o.y, w: o.w, h: o.h });
+    if (hit) {
+      endGame();
+      break;
+    }
+  }
+  // Collisions with birds
+  for (let i = 0; i < s.birds.length; i++) {
+    const b = s.birds[i];
+    const hit = aabbIntersect(catBox, { x: b.x - 20, y: b.y - 12, w: 40, h: 24 });
+    if (hit) {
+      endGame();
+      break;
+    }
+  }
+
+  // Particles
+  for (let i = s.particles.length - 1; i >= 0; i--) {
+    const p = s.particles[i];
+    p.life -= dt;
+    p.x += p.vx * dt - worldSpeed * dt * 0.4; // world scroll
+    p.y += p.vy * dt;
+    p.vy += GRAVITY * 0.35 * dt;
+    if (p.life <= 0) s.particles.splice(i, 1);
+  }
+
+  // Distance/score
+  s.distance += worldSpeed * dt;
+  setScore(Math.floor(s.distance / 2));
+
+  // Update high score in local state
+  setHigh(h => (score > h ? score : h));
+
+  // Render
+  render(ctx, canvas, s, { width, height });
+}
+
+function loop(now) {
+  if (!running || gameOver) {
+    last = now;
+    rafId = requestAnimationFrame(loop);
+    render(ctx, canvas, stateRef.current, null); // still render pause overlay
+    return;
+  }
+  const dt = (now - last) / 1000;
+  last = now;
+  acc += dt;
+  const MAX_ACC = 0.25;
+  if (acc > MAX_ACC) acc = MAX_ACC; // avoid spiral of death
+  while (acc >= FIXED) {
+    step(FIXED);
+    acc -= FIXED;
+  }
+  rafId = requestAnimationFrame(loop);
+}
+
+function render(ctx, canvas, s, catDims) {
+  const w = canvas.clientWidth;
+  const h = canvas.clientHeight;
+
+  // Clear sky
+  ctx.fillStyle = "#eaf3ff";
+  ctx.fillRect(0, 0, w, h);
+
+  // Parallax background layers
+  const t = s ? s.t : 0;
+  const speed = s ? s.speed : BASE_SPEED;
+  parallax(ctx, w, h, (t * (speed * 0.15)) % (w + 200), 0.25);
+  parallax(ctx, w, h, (t * (speed * 0.35)) % (w + 200), 0.5);
+
+  // Ground
+  ctx.fillStyle = "#f5e6c5";
+  ctx.fillRect(0, GROUND_Y + 8, w, h - (GROUND_Y + 8));
+  // Ground line
+  ctx.fillStyle = "#d1bfa0";
+  ctx.fillRect(0, GROUND_Y + 6, w, 2);
+
+  if (!s) return;
+
+  // Obstacles
+  for (const o of s.obstacles) drawCactus(ctx, o.x, GROUND_Y, o.h, o.w);
+  for (const b of s.birds) drawBird(ctx, b.x, b.y, s.t);
+
+  // Particles
+  for (const p of s.particles) {
+    ctx.globalAlpha = clamp(p.life, 0, 1);
+    ctx.fillStyle = "#d1bfa0";
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+
+  // Cat
+  drawCat(ctx, s.cat.x, s.cat.y - (s.cat.crouch ? 10 : 16), s.cat.crouch, s.t);
+
+  // HUD
+  ctx.fillStyle = "#111";
+  ctx.font = "16px ui-monospace, SFMono-Regular, Menlo, monospace";
+  ctx.fillText(`SCORE ${Math.floor(s.distance / 2)}`, w - 160, 26);
+  ctx.fillText(`BEST ${Math.max(high, Math.floor(s.distance / 2))}`, w - 160, 46);
+
+  if (!running) drawOverlay(ctx, w, h, "Paused — Press P to resume");
+  if (gameOver) drawOverlay(ctx, w, h, "Game Over — Press R to restart");
+}
+
+function drawOverlay(ctx, w, h, text) {
+  ctx.fillStyle = "rgba(0,0,0,0.35)";
+  ctx.fillRect(0, 0, w, h);
+  ctx.fillStyle = "white";
+  ctx.font = "bold 24px ui-sans-serif, system-ui";
+  ctx.textAlign = "center";
+  ctx.fillText(text, w / 2, h / 2);
+  ctx.textAlign = "start";
+}
+
+function parallax(ctx, w, h, offset, scale) {
+  ctx.save();
+  ctx.translate(-offset, 0);
+  ctx.fillStyle = scale < 0.3 ? "#bcd1ea" : scale < 0.6 ? "#9fc0e4" : "#86b2de";
+  // distant hills
+  for (let x = -200; x < w + 200; x += 180) {
+    ctx.beginPath();
+    const baseY = GROUND_Y - 60 * scale;
+    ctx.moveTo(x, baseY);
+    ctx.quadraticCurveTo(x + 60, baseY - 50 * scale, x + 120, baseY);
+    ctx.quadraticCurveTo(x + 160, baseY + 18 * scale, x + 180, baseY);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+function aabbIntersect(a, b) {
+  return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+}
+
+function spawnDust(s, x, y, count, life) {
+  for (let i = 0; i < count; i++) {
+    s.particles.push({
+      x: x + rand(-6, 6),
+      y: y + rand(-4, 4),
+      vx: rand(20, 140) * (Math.random() < 0.5 ? -1 : 1),
+      vy: rand(-220, -80),
+      r: rand(1.5, 3.5),
+      life: rand(0.2 * life, 0.5 * life),
+    });
+  }
+}
+
+function togglePause() {
+  setRunning(r => !r);
+}
+
+function restart() {
+  setGameOver(false);
+  setRunning(true);
+  setScore(0);
+  const s = stateRef.current;
+  Object.assign(s, {
+    t: 0,
+    speed: BASE_SPEED,
+    cat: { x: 120, y: GROUND_Y, vy: 0, onGround: true, crouch: false, coyoteLeft: 0, bufferLeft: 0 },
+    obstacles: [],
+    birds: [],
+    particles: [],
+    spawnTimer: 0,
+    birdTimer: 1.8,
+    wind: 0,
+    windTimer: 3,
+    distance: 0,
+  });
+}
+
+function endGame() {
+  if (!gameOver) {
+    setGameOver(true);
+    setRunning(false);
+    setHigh(h => Math.max(h, Math.floor(stateRef.current.distance / 2)));
+  }
+}
+
+rafId = requestAnimationFrame(loop);
+
+return () => {
+  cancelAnimationFrame(rafId);
+  window.removeEventListener("resize", onResize);
+  window.removeEventListener("keydown", onKeyDown);
+  window.removeEventListener("keyup", onKeyUp);
+  canvas.removeEventListener("pointerdown", onPointerDown);
+  window.removeEventListener("pointerup", onPointerUp);
+};
+// eslint-disable-next-line react-hooks/exhaustive-deps
+
+}, [running, gameOver]);
+
+return ( <div className="w-full h-[72vh] min-h-[420px] bg-white relative select-none"> <canvas ref={canvasRef} className="w-full h-full block" />
+
+<div className="pointer-events-none absolute top-2 left-2 flex gap-2">
+    <kbd className="px-2 py-1 rounded-xl bg-gray-100 shadow text-xs">Space/W/↑: Jump</kbd>
+    <kbd className="px-2 py-1 rounded-xl bg-gray-100 shadow text-xs">S/↓: Crouch</kbd>
+    <kbd className="px-2 py-1 rounded-xl bg-gray-100 shadow text-xs">P: Pause</kbd>
+    <kbd className="px-2 py-1 rounded-xl bg-gray-100 shadow text-xs">R: Restart</kbd>
+  </div>
+
+  <div className="absolute bottom-3 left-3 flex gap-3">
+    <button
+      onClick={() => setRunning(r => !r)}
+      className="px-3 py-2 rounded-2xl shadow bg-slate-900 text-white text-sm hover:opacity-90"
+    >
+      {running && !gameOver ? "Pause" : gameOver ? "Resume to View" : "Resume"}
+    </button>
+    <button
+      onClick={() => {
+        setGameOver(false);
+        setRunning(true);
+        const s = stateRef.current;
+        Object.assign(s, {
+          t: 0,
+          speed: BASE_SPEED,
+          cat: { x: 120, y: GROUND_Y, vy: 0, onGround: true, crouch: false, coyoteLeft: 0, bufferLeft: 0 },
+          obstacles: [],
+          birds: [],
+          particles: [],
+          spawnTimer: 0,
+          birdTimer: 1.8,
+          wind: 0,
+          windTimer: 3,
+          distance: 0,
+        });
+      }}
+      className="px-3 py-2 rounded-2xl shadow bg-amber-500 text-white text-sm hover:opacity-90"
+    >
+      Restart
+    </button>
+  </div>
+
+  <div className="absolute bottom-3 right-3 text-right bg-white/70 rounded-2xl px-3 py-2 shadow">
+    <div className="text-xs text-gray-600">Score</div>
+    <div className="text-xl font-semibold tabular-nums">{score}</div>
+    <div className="text-[11px] text-gray-500">Best: {Math.max(high, score)}</div>
+  </div>
+</div>
+
+); }
+
+                  
